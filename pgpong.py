@@ -1,14 +1,16 @@
 import numpy as np
 import gym
 import time
+import torch
 
 from agent import Agent
 from helpers import Helpers
+from pytorch.agent import Agent as PyAgent
 
 # hyper-parameters
 hidden_layers_count = 200  # number of hidden layer neurons
 batch_size = 10  # every how many episodes to do a param update?
-learning_rate = 1e-4
+learning_rate = 5e-4
 gamma = 0.99  # discount factor for reward
 decay_rate = 0.99  # decay factor for RMSProp leaky sum of grad^2
 
@@ -25,11 +27,11 @@ def render_game():
         time.sleep(sleep_for_rendering_in_seconds)
 
 
-def get_frame_difference():
-    # pre-process the observation, set input to network to be difference image
-    current_frame = Helpers.preprocess_frame(observation)
-    state = current_frame - previous_frame if previous_frame is not None else np.zeros(pixels_count)
-    return state, current_frame
+# def get_frame_difference(_observation, _previous_frame):
+#     # pre-process the observation, set input to network to be difference image
+#     current_frame = Helpers.preprocess_frame(_observation)
+#     state = current_frame - _previous_frame if _previous_frame is not None else np.zeros(pixels_count) # np.zeros((80, 80))
+#     return current_frame, current_frame
 
 
 if __name__ == '__main__':
@@ -37,12 +39,12 @@ if __name__ == '__main__':
     observation = env.reset()
     previous_frame, running_reward = None, None  # used in computing the difference frame
     reward_sum = 0
-    episode_number = 0
-    agent = Agent(learning_rate, decay_rate)
+    agent = PyAgent(learning_rate, decay_rate)
+    episode_number = agent.episode
 
     while True:
         render_game()
-        state, previous_frame = get_frame_difference()
+        state = Helpers.preprocess_frame(observation, torch.device("cpu"))  # get_frame_difference(observation, previous_frame)
         action = agent.get_action(state)
         observation, reward, done, info = env.step(action)
         agent.reap_reward(reward)
@@ -53,7 +55,7 @@ if __name__ == '__main__':
 
         if done:
             episode_number += 1
-            agent.make_episode_end_updates(episode_number)
+            agent.make_episode_end_updates()
 
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
