@@ -2,21 +2,20 @@ from memory import Memory
 from torch.distributions import Categorical
 
 from helpers import Helpers
-from .mlp import MLP
+from .mlp import MLP as PyMLP
 
 
 class Agent:
-    def __init__(self, learning_rate, decay_rate, gamma=0.99, batch_size=5, load_network=True, network_file='mlp.pt'):
-        self.memory = Memory()
-        self.learning_rate = learning_rate
-        self.decay_rate = decay_rate
+    def __init__(self, action_space: list, policy_network: PyMLP, gamma=0.99,
+                 batch_size=5, load_network=True, network_file='mlp.pt'):
+        self.action_space = action_space
         self.gamma = gamma
+        self.memory = Memory()
+
+        self.policy_network = policy_network
+        self.policy_network.train()
         self.batch_size = batch_size
         self.network_file = network_file
-        self.policy_network = MLP(input_count=6400, hidden_layers=[128, 128], output_count=3,
-                                  learning_rate=learning_rate, decay_rate=decay_rate, drop_out_rate=0.5)
-
-        self.policy_network.train()
 
         if load_network:
             self.episode = self.__load_policy_network_and_episode()
@@ -26,8 +25,7 @@ class Agent:
         distribution = Categorical(probabilities)
         action = distribution.sample()
         self.memory.dlogps.append(distribution.log_prob(action))
-        custom_action = [1, 2, 3]
-        action = custom_action[action.item()]
+        action = self.action_space[action.item()]
         return action
 
     def reap_reward(self, reward):
