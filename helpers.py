@@ -8,13 +8,13 @@ class Helpers:
         return 1.0 / (1.0 + np.exp(-number))  # sigmoid "squashing" function to interval [0,1]
 
     @staticmethod
-    def preprocess_frame(observation, dev):
+    def preprocess_frame(observation, device=torch.device("cpu")):
         observation = observation[35:195]  # crop
         observation = observation[::2, ::2, 0]  # down-sample by factor of 2
         observation[observation == 144] = 0  # erase background (background type 1)
         observation[observation == 109] = 0  # erase background (background type 2)
         observation[observation != 0] = 1  # everything else (paddles, ball) just set to 1
-        return torch.tensor(observation).type(torch.FloatTensor).to(dev)
+        return torch.tensor(observation).type(torch.FloatTensor).to(device)
 
     @staticmethod
     def discount_and_normalize_rewards(rewards, gamma):

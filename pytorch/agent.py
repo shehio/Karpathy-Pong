@@ -7,7 +7,7 @@ from .mlp import MLP as PyMLP
 
 class Agent:
     def __init__(self, action_space: list, policy_network: PyMLP, gamma=0.99,
-                 batch_size=5, load_network=True, network_file='mlp.pt'):
+                 batch_size=5, load_network=True, network_file='mlp.pt', frame_difference_enabled=True):
         self.action_space = action_space
         self.gamma = gamma
         self.memory = Memory()
@@ -16,16 +16,19 @@ class Agent:
         self.policy_network.train()
         self.batch_size = batch_size
         self.network_file = network_file
+        self.frame_difference_enabled = frame_difference_enabled
 
         if load_network:
             self.episode = self.__load_policy_network_and_episode()
 
     def get_action(self, state):
-        probabilities = self.policy_network(state)
+        probabilities = self.policy_network(state, self.frame_difference_enabled)
         distribution = Categorical(probabilities)
         action = distribution.sample()
+
         self.memory.dlogps.append(distribution.log_prob(action))
         action = self.action_space[action.item()]
+
         return action
 
     def reap_reward(self, reward):

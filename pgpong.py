@@ -14,11 +14,11 @@ learning_rate = 5e-4
 gamma = 0.99  # discount factor for reward
 decay_rate = 0.99  # decay factor for RMSProp leaky sum of grad^2
 
-resume = True  # resume from previous checkpoint?
+resume = True
 render = True
 sleep_for_rendering_in_seconds = 0.02
-
-pixels_count = 80 * 80  # input dimensionality: 80x80 grid
+pixels_count = 80 * 80
+frame_difference_enabled = True
 
 
 def render_game():
@@ -27,18 +27,19 @@ def render_game():
         time.sleep(sleep_for_rendering_in_seconds)
 
 
-def get_frame_difference(_observation, _previous_frame):
+def get_frame_difference(observation, _previous_frame, device=torch.device('cpu')):
     # pre-process the observation, set input to network to be difference image
-    current_frame = Helpers.preprocess_frame(_observation)
-    state = current_frame - _previous_frame if _previous_frame is not None else torch.tensor(
-        np.zeros(pixels_count)).type(torch.FloatTensor).to(torch.device('cpu'))
-    return current_frame, current_frame
+    processed_frame = Helpers.preprocess_frame(observation, device)
+    if _previous_frame is not None:
+        return processed_frame - _previous_frame, processed_frame
+    else:
+        return torch.tensor(np.zeros(pixels_count)).type(torch.FloatTensor).to(device), processed_frame
 
 
 if __name__ == '__main__':
     env = gym.make("Pong-v0")
-    observation = env.reset()
-    previous_frame, running_reward = None, None  # used in computing the difference frame
+    current_frame = env.reset()
+    previous_frame, running_reward = None, None  # To compute the difference frame
     reward_sum = 0
     action_space = [1, 2, 3]
     policy_network = PyMLP(input_count=6400, hidden_layers=[128, 128], output_count=len(action_space),
@@ -49,10 +50,12 @@ if __name__ == '__main__':
 
     while True:
         render_game()
-        state = Helpers.preprocess_frame(observation,
-                                         torch.device("cpu"))  # get_frame_difference(observation, previous_frame)
+        if frame_difference_enabled:
+            state, previous_frame = get_frame_difference(current_frame, previous_frame)
+        else:
+            state = Helpers.preprocess_frame(current_frame)
         action = agent.get_action(state)
-        observation, reward, done, info = env.step(action)
+        current_frame, reward, done, info = env.step(action)
         agent.reap_reward(reward)
         reward_sum += reward
 
@@ -66,6 +69,6 @@ if __name__ == '__main__':
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
 
-            observation = env.reset()
+            current_frame = env.reset()
             reward_sum = 0
             previous_frame = None

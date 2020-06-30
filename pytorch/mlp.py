@@ -36,11 +36,14 @@ class MLP(nn.Module):
         layers.append(current_layer)
         layers.append(nn.ReLU(inplace=True))
 
-    def forward(self, _input):
+    def forward(self, _input, use_dim=False):
         _input = _input.view(-1, self.input_count)
         for layer in self.layers:
             _input = layer(_input)
-        return F.softmax(_input, dim=1)
+        if use_dim:
+            return F.softmax(_input, dim=1)
+        else:
+            return F.softmax(_input)
 
     def update_policy(self, discounted_rewards, log_probs, dev=torch.device("cpu")):
         cumulative_reward = - torch.cat(log_probs).to(dev) * discounted_rewards
