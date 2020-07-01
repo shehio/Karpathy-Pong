@@ -41,8 +41,8 @@ class Agent:
 
     def __train_policy_network(self):
         if self.episode % self.batch_size == 0:
-            d_rewards = Helpers.discount_and_normalize_rewards(self.memory.rewards, self.gamma)
-            loss = self.policy_network.update_policy(d_rewards, self.memory.dlogps)
+            discounted_rewards = Helpers.discount_and_normalize_rewards(self.memory.rewards, self.gamma)
+            loss = self.policy_network.update_policy(discounted_rewards, self.memory.dlogps)
             self.memory = Memory()
 
     def __save_policy_network(self):
