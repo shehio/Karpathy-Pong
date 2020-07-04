@@ -1,11 +1,14 @@
+import copy
+import itertools
 import torch
-import torch.nn as nn
 from torch.distributions import Categorical
+import torch.nn.functional as F
 from torch.optim.rmsprop import RMSprop
 
-from memory import Memory
 from .actor import Actor
 from .critic import Critic
+from helpers import Helpers
+from memory import Memory
 
 
 class PPOActorCritic:
@@ -24,13 +27,14 @@ class PPOActorCritic:
         self.batch_size = batch_size
 
         self.memory = Memory()
-        self.policy_optimizer, self.value_optimizer = self.__get_optimizers(decay_rate, learning_rate)
+        self.optimizer = self.__get_optimizers(decay_rate, learning_rate)
 
-    def act(self, state):
+    def get_action(self, state):
         self.memory.states.append(state)
 
-        sampled_action_index, action, distribution = self.actor.act(state)
-        self.memory.actions.append(action)
+        with torch.no_grad():
+            sampled_action_index, action, distribution = self.actor.act(state)
+        self.memory.actions.append(sampled_action_index)
         self.memory.dlogps.append(distribution.log_prob(sampled_action_index))
 
         return action
@@ -41,19 +45,18 @@ class PPOActorCritic:
     def make_episode_updates(self):
         self.episode_number = self.episode_number + 1
         if self.episode_number % self.batch_size == 0:
-            new_policy_network = self.actor.policy_network.clone()
-            memory = self.memory
-            self.__evaluate_and_train_networks(memory, new_policy_network)
+            self.memory.rewards = Helpers.discount_and_normalize_rewards(self.memory.rewards, self.gamma)
+            self.__evaluate_and_train_networks(self.memory, copy.deepcopy(self.actor.policy_network))
             self.__reset_actor_and_memory()
 
     def __get_optimizers(self, decay_rate, learning_rate):
-        policy_optimizer = RMSprop(self.actor.policy_network.parameters(), lr=learning_rate, weight_decay=decay_rate)
-        value_optimizer = RMSprop(self.critic.value_network.parameters(), lr=learning_rate, weight_decay=decay_rate)
-        return policy_optimizer, value_optimizer
+        params = [self.actor.policy_network.parameters(), self.critic.value_network.parameters()]
+        optimizer = RMSprop(itertools.chain(*params), lr=learning_rate, weight_decay=decay_rate)
+        return optimizer
 
     def __evaluate_and_train_networks(self, memory, new_policy_network):
         for action, state, old_log_probability, reward in zip(memory.actions, memory.states, memory.dlogps,
-                                                              memory.rewards):  # Make memory a ppo memory
+                                                              memory.rewards):  # TODO: Make memory a ppo memory
             predicted_value = self.critic.evaluate(state)
             new_distribution = Categorical(new_policy_network(state))
             new_log_probability = new_distribution.log_prob(action)
@@ -61,40 +64,34 @@ class PPOActorCritic:
             action_loss, value_loss = self.__get_action_and_value_loss(old_log_probability, new_log_probability,
                                                                        predicted_value, reward,
                                                                        new_distribution.entropy())
-            self.__optimize_networks(action_loss, value_loss)
+            self.__optimize_networks(action_loss, value_loss, reward, predicted_value)
 
     def __get_action_and_value_loss(self, old_action_log_probability, new_action_log_probability,
                                     predicted_value, actual_reward, distribution_entropy):
+        advantage = torch.FloatTensor(actual_reward - predicted_value)
         surrogate1, surrogate2 = self.__get_ppo_surrogate_functions(old_action_log_probability,
-                                                                    new_action_log_probability,
-                                                                    predicted_value, actual_reward)
+                                                                    new_action_log_probability, advantage)
         surrogates_loss = torch.min(surrogate1, surrogate2).mean()
-        value_loss = nn.MSELoss(actual_reward - predicted_value)
+        value_loss1 = F.mse_loss(actual_reward, predicted_value[0][0])
+        value_loss2 = F.mse_loss(actual_reward.clone().detach(), predicted_value[0][0].detach().clone())
 
         # loss is negative of the gain in the paper: https://arxiv.org/abs/1707.06347
-        action_loss = - surrogates_loss + self.c1 * value_loss - self.c2 * distribution_entropy
+        action_loss = - surrogates_loss + torch.mul(self.c1,  value_loss1) - torch.mul(self.c2, distribution_entropy)
 
-        return action_loss, value_loss
+        return action_loss, value_loss2
 
-    def __get_ppo_surrogate_functions(self, old_action_log_probability, new_action_log_probability,
-                                      predicted_value, actual_reward):
+    def __get_ppo_surrogate_functions(self, old_action_log_probability, new_action_log_probability, advantage):
         policy_ratio = torch.exp(new_action_log_probability - old_action_log_probability)
         clipped_ratio = torch.clamp(policy_ratio, 1 - self.eta, 1 + self.eta)
-        advantage = torch.FloatTensor(actual_reward - predicted_value)
 
         surrogate1 = policy_ratio * advantage
         surrogate2 = clipped_ratio * advantage
         return surrogate1, surrogate2
 
-    def __optimize_networks(self, action_loss, value_loss):
-        self.policy_optimizer.zero_grad()
-
+    def __optimize_networks(self, action_loss, value_loss, actual_reward, predicted_value):
+        self.optimizer.zero_grad()
         action_loss.backward()
-        self.policy_optimizer.step()
-
-        self.value_optimizer.step()
-        value_loss.backward()
-        self.value_optimizer.zero_grad()
+        self.optimizer.step()
 
     def __reset_actor_and_memory(self):
         self.actor = Actor(self.policy_network, self.action_space)

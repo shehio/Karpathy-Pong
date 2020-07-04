@@ -4,8 +4,14 @@ import time
 import torch
 
 from helpers import Helpers
+
 from pytorch.agent import Agent as PyAgent
 from pytorch.mlp import MLP as PyMLP
+
+from ppo.actor import Actor
+from ppo.critic import Critic
+from ppo.networkhelpers import NetworkHelpers
+from ppo.ppoactorcritic import PPOActorCritic as PPOAgent
 
 # hyper-parameters
 hidden_layers_count = 200  # number of hidden layer neurons
@@ -15,10 +21,11 @@ gamma = 0.99  # discount factor for reward
 decay_rate = 0.99  # decay factor for RMSProp leaky sum of grad^2
 
 resume = True
-render = True
+render = False
 sleep_for_rendering_in_seconds = 0.02
 pixels_count = 80 * 80
 frame_difference_enabled = True
+algorithm = 'ppo'
 
 
 def render_game():
@@ -42,11 +49,18 @@ if __name__ == '__main__':
     previous_frame, running_reward = None, None  # To compute the difference frame
     reward_sum = 0
     action_space = [1, 2, 3]
-    policy_network = PyMLP(input_count=6400, hidden_layers=[128, 128], output_count=len(action_space),
-                           learning_rate=learning_rate, decay_rate=decay_rate, drop_out_rate=0.5)
 
-    agent = PyAgent(action_space, policy_network)
-    episode_number = agent.episode
+    if algorithm == 'vanilla':
+        policy_network = PyMLP(input_count=6400, hidden_layers=[128, 128], output_count=len(action_space),
+                               learning_rate=learning_rate, decay_rate=decay_rate, drop_out_rate=0.5)
+        agent = PyAgent(action_space, policy_network)
+        episode_number = agent.episode
+
+    elif algorithm == 'ppo':
+        actor = Actor(NetworkHelpers.create_simple_network(output_count=len(action_space), tanh=True), action_space)
+        critic = Critic(NetworkHelpers.create_simple_network(output_count=1, tanh=True))
+        agent = PPOAgent(actor, critic, action_space, 0, batch_size=1)
+        episode_number = 0
 
     while True:
         render_game()
@@ -59,12 +73,12 @@ if __name__ == '__main__':
         agent.reap_reward(reward)
         reward_sum += reward
 
-        if reward != 0:  # Pong has either +1 or -1 reward exactly when game ends.
+        if reward != 0:  # Pong has either +1 or -1 reward exactly when the game ends.
             print('ep %d: game finished, reward: %f' % (episode_number, reward) + ('' if reward == -1 else ' !!!!!!!!'))
 
         if done:
             episode_number += 1
-            agent.make_episode_end_updates()
+            agent.make_episode_updates()
 
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
