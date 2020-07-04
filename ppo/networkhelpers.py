@@ -7,9 +7,9 @@ class NetworkHelpers:
 
     @staticmethod
     def create_simple_network(tanh=False):
-        '''
+        """
         :return: A simple network with either ReLU or Tanh in the intermediate layers and softmax in the final layer
-        '''
+        """
 
         return NetworkHelpers.Network(tanh=tanh)
 
