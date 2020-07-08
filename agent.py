@@ -36,7 +36,7 @@ class Agent:
         return action
 
     def reap_reward(self, reward):
-        self.memory.rewards.append(reward)
+        self.memory.actual_rewards.append(reward)
 
     def make_episode_end_updates(self, episode_number):
         self.__accumalate_gradient()
@@ -50,10 +50,10 @@ class Agent:
         episode_states = np.vstack(self.memory.states)
         episode_hidden_layers = np.vstack(self.memory.hidden_layers)
         epdlogp = np.vstack(self.memory.dlogps)
-        episode_rewards = np.vstack(self.memory.rewards)
+        episode_rewards = np.vstack(self.memory.actual_rewards)
 
         # compute the discounted reward backwards through time
-        episode_discounted_rewards = Helpers.discount_and_normalize_rewards(episode_rewards, self.gamma)
+        episode_discounted_rewards = Helpers.discount_and_normalize_rewards_for_pong(episode_rewards, self.gamma)
         epdlogp *= episode_discounted_rewards  # modulate the gradient with advantage (PG magic happens right here.)
         self.policy_network.backward_pass(episode_hidden_layers, epdlogp, episode_states)
 

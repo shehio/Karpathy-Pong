@@ -3,33 +3,18 @@ import torch.optim.rmsprop as rmsprop
 import torch.nn.functional as F
 
 
-class Network(nn.Module):
-    def __init__(self, input_count=6400, hidden_layers=[200, 200], output_count=3,
-                 learning_rate=0.005, decay_rate=0.99, drop_out_rate=0.5, tanh=False):
-        super(Network, self).__init__()
-
-        self.input_count = input_count
-        layers_count = Network.__construct_layers_count(hidden_layers, input_count)
-        self.layers = Network.__create_network(layers_count, output_count, drop_out_rate, tanh)
-        self.optimizer = rmsprop.RMSprop(self.parameters(), lr=learning_rate, weight_decay=decay_rate)
-
-    def forward(self, _input):
-        _input = _input.view(-1, self.input_count)
-        for layer in self.layers:
-            _input = layer(_input)
-        return F.softmax(_input)
-
+class CommonHelpers:
     @staticmethod
-    def __construct_layers_count(hidden_layers, input_count):
+    def construct_layers_count(hidden_layers, input_count):
         layers_count = hidden_layers
         layers_count.insert(0, input_count)
         return layers_count
 
     @staticmethod
-    def __create_network(layers_count, output_count, drop_out_rate, tanh=False):
+    def create_network(layers_count, output_count, drop_out_rate, tanh=False):
         layers = nn.ModuleList()
         for i in range(len(layers_count) - 1):
-            Network.__add_layer_to_network(layers, layers_count[i], layers_count[i + 1], tanh)
+            CommonHelpers.__add_layer_to_network(layers, layers_count[i], layers_count[i + 1], tanh)
         layers.append(nn.Dropout(drop_out_rate))
         layers.append(nn.Linear(layers_count[-1], output_count))
         return layers
@@ -44,11 +29,54 @@ class Network(nn.Module):
             layers.append(nn.ReLU(inplace=True))
 
 
+class ActorNetwork(nn.Module):
+    def __init__(self, input_count, hidden_layers, output_count, learning_rate=0.002,
+                 decay_rate=0.99, drop_out_rate=0.0, tanh=False):
+        super(ActorNetwork, self).__init__()
+
+        self.input_count = input_count
+        layers_count = CommonHelpers.construct_layers_count(hidden_layers, input_count)
+        self.layers = CommonHelpers.create_network(layers_count, output_count, drop_out_rate, tanh)
+        self.optimizer = rmsprop.RMSprop(self.parameters(), lr=learning_rate, weight_decay=decay_rate)
+
+    def forward(self, _input):
+        _output = _input
+        for layer in self.layers:
+            _output = layer(_output)
+
+        return F.softmax(_output)
+
+
+class CriticNetwork(nn.Module):
+    def __init__(self, input_count, hidden_layers, output_count,learning_rate=0.002,
+                 decay_rate=0.99, drop_out_rate=0.0, tanh=False):
+        super(CriticNetwork, self).__init__()
+
+        self.input_count = input_count
+        layers_count = CommonHelpers.construct_layers_count(hidden_layers, input_count)
+        self.layers = CommonHelpers.create_network(layers_count, output_count, drop_out_rate, tanh)
+        self.optimizer = rmsprop.RMSprop(self.parameters(), lr=learning_rate, weight_decay=decay_rate)
+
+    def forward(self, _input):
+        _output = _input
+        for layer in self.layers:
+            _output = layer(_output)
+        return _output
+
+
 class NetworkHelpers:
 
     @staticmethod
-    def create_simple_network(output_count, tanh=False):
+    def create_simple_actor_network(input_count: int, hidden_layers: list, output_count: int, tanh=False):
         """
-        :return: A simple network with either ReLU or Tanh in the intermediate layers and softmax in the final layer
+        :return: A simple actor network with either ReLU or Tanh in the intermediate layers
+        and softmax in the final layer
         """
-        return Network(output_count=output_count, tanh=tanh)
+        return ActorNetwork(input_count=input_count, hidden_layers=hidden_layers, output_count=output_count, tanh=tanh)
+
+    @staticmethod
+    def create_simple_critic_network(input_count: int, hidden_layers: list, output_count: int, tanh=False):
+        """
+        :return: A simple critic network with either ReLU or Tanh in the all layers
+        """
+        return CriticNetwork(input_count=input_count, hidden_layers=hidden_layers, output_count=output_count, tanh=tanh)

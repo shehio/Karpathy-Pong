@@ -32,7 +32,7 @@ class Agent:
         return action
 
     def reap_reward(self, reward):
-        self.memory.rewards.append(reward)
+        self.memory.actual_rewards.append(reward)
 
     def make_episode_end_updates(self):
         self.episode = self.episode + 1
@@ -41,7 +41,7 @@ class Agent:
 
     def __train_policy_network(self):
         if self.episode % self.batch_size == 0:
-            discounted_rewards = Helpers.discount_and_normalize_rewards(self.memory.rewards, self.gamma)
+            discounted_rewards = Helpers.discount_and_normalize_rewards_for_pong(self.memory.actual_rewards, self.gamma)
             loss = self.policy_network.update_policy(discounted_rewards, self.memory.dlogps)
             self.memory = Memory()
 

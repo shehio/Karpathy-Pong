@@ -15,7 +15,7 @@ from ppo.ppoactorcritic import PPOActorCritic as PPOAgent
 
 # hyper-parameters
 hidden_layers_count = 200  # number of hidden layer neurons
-batch_size = 10  # every how many episodes to do a param update?
+batch_size = 5  # every how many episodes to do a param update?
 learning_rate = 5e-4
 gamma = 0.99  # discount factor for reward
 decay_rate = 0.99  # decay factor for RMSProp leaky sum of grad^2
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     elif algorithm == 'ppo':
         actor = Actor(NetworkHelpers.create_simple_network(output_count=len(action_space), tanh=True), action_space)
         critic = Critic(NetworkHelpers.create_simple_network(output_count=1, tanh=True))
-        agent = PPOAgent(actor, critic, action_space, 0, batch_size=1)
+        agent = PPOAgent(actor, critic, action_space, 0, batch_size=batch_size)
         episode_number = 0
 
     while True:

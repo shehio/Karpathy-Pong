@@ -17,7 +17,7 @@ class Helpers:
         return torch.tensor(observation).type(torch.FloatTensor).to(device)
 
     @staticmethod
-    def discount_and_normalize_rewards(rewards, gamma):
+    def discount_and_normalize_rewards_for_pong(rewards, gamma, normalize=True, device=torch.device("cpu")):
         discounted_rewards = np.zeros_like(rewards)
         running_add = 0
         for t in reversed(range(0, len(rewards))):
@@ -27,6 +27,23 @@ class Helpers:
             discounted_rewards[t] = running_add
 
         # standardize the rewards to be unit normal (helps control the gradient estimator variance)
-        discounted_rewards = torch.tensor(discounted_rewards, dtype=torch.float32).to(torch.device('cpu'))
-        discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / discounted_rewards.std()
+        if normalize:
+            discounted_rewards = torch.tensor(discounted_rewards, dtype=torch.float32).to(device)
+            discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / discounted_rewards.std()
+
+        return discounted_rewards
+
+    @staticmethod  # @Todo: Collect the common parts into one method.
+    def discount_and_normalize_rewards_for_lunar_lander(rewards, episode_completed, gamma, device=torch.device("cpu")):
+        discounted_rewards = np.zeros_like(rewards)
+        running_add = 0
+        for t in reversed(range(0, len(rewards))):
+            if episode_completed[t]:
+                running_add = 0
+            running_add = running_add * gamma + rewards[t]
+            discounted_rewards[t] = running_add
+
+        discounted_rewards = torch.tensor(discounted_rewards, dtype=torch.float32).to(device)
+        discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + + 1e-5)
+
         return discounted_rewards

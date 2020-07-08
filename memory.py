@@ -3,10 +3,12 @@ class Memory:
     def __init__(self):
         self.dlogps = []
         self.hidden_layers = []
-        self.rewards = []
+        self.actual_rewards = []
         self.states = []
 
         # PPO additional fields
         self.entropies = []
-        self.state_values = []
         self.actions = []
+        self.new_dlogps = []
+        self.predicted_values = []
+        self.episode_complete = []
