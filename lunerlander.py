@@ -15,6 +15,7 @@ batch_size = 20  # every how many episodes to do a param update?
 learning_rate = 5e-4
 gamma = 0.99  # discount factor for reward
 decay_rate = 0.99  # decay factor for RMSProp leaky sum of grad^2
+update_threshold = 2000
 
 resume = True
 render = False
@@ -45,6 +46,7 @@ if __name__ == '__main__':
     current_state = env.reset()
     episode_reward = 0
     batch_average_reward = 0
+    timestep = 0
     action_space = [0, 1, 2, 3]
 
     if algorithm == 'vanilla':
@@ -57,25 +59,33 @@ if __name__ == '__main__':
         actor = Actor(create_actor_network(state_dimension, [64, 64], len(action_space)), action_space)
         critic = Critic(create_critic_network(state_dimension, [64], 1))
         episode_number = 0
+        avg_length = 0
         agent = PPOAgent(actor, critic, action_space, episode_number, batch_size=batch_size)
 
     while True:
         render_game()
         action = agent.get_action(current_state)
         current_state, reward, done, info = env.step(action)
+
         agent.reap_reward(reward)
         agent.has_finished(done)
-        # print(reward)
+
+        timestep += 1
+        avg_length += 1
         episode_reward += reward
+
+        if timestep % update_threshold == 0:
+            agent.make_episode_updates()
+            timestep = 0
 
         if done:
             episode_number += 1
             batch_average_reward += episode_reward
-            agent.make_episode_updates()
 
             if episode_number % batch_size == 0:
+                avg_length = int(avg_length / batch_size)
                 batch_average_reward = int(batch_average_reward / batch_size)
-                print(f'Episode {episode_number} \t reward: {batch_average_reward}')
+                print(f'Episode {episode_number}\t avg length: {avg_length} \t reward: {batch_average_reward}')
                 batch_average_reward = 0
                 avg_length = 0
 

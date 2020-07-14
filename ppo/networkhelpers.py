@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.optim.rmsprop as rmsprop
 import torch.nn.functional as F
@@ -39,8 +40,8 @@ class ActorNetwork(nn.Module):
         self.layers = CommonHelpers.create_network(layers_count, output_count, drop_out_rate, tanh)
         self.optimizer = rmsprop.RMSprop(self.parameters(), lr=learning_rate, weight_decay=decay_rate)
 
-    def forward(self, _input):
-        _output = _input
+    def forward(self, _input: torch.tensor):
+        _output = _input.float()
         for layer in self.layers:
             _output = layer(_output)
 

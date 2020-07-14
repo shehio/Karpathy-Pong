@@ -14,7 +14,7 @@ class Helpers:
         observation[observation == 144] = 0  # erase background (background type 1)
         observation[observation == 109] = 0  # erase background (background type 2)
         observation[observation != 0] = 1  # everything else (paddles, ball) just set to 1
-        return torch.tensor(observation).type(torch.FloatTensor).to(device)
+        return torch.tensor(observation).view(-1).numpy()
 
     @staticmethod
     def discount_and_normalize_rewards_for_pong(rewards, gamma, normalize=True, device=torch.device("cpu")):

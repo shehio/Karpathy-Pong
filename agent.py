@@ -54,7 +54,7 @@ class Agent:
 
         # compute the discounted reward backwards through time
         episode_discounted_rewards = Helpers.discount_and_normalize_rewards_for_pong(episode_rewards, self.gamma)
-        epdlogp *= episode_discounted_rewards  # modulate the gradient with advantage (PG magic happens right here.)
+        epdlogp *= episode_discounted_rewards  # modulate the gradient with advantage (PG magic happens right here)
         self.policy_network.backward_pass(episode_hidden_layers, epdlogp, episode_states)
 
     def __train_policy_network(self, episode_number):

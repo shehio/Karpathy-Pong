@@ -34,17 +34,26 @@ def render_game():
         time.sleep(sleep_for_rendering_in_seconds)
 
 
+def create_actor_network(input_count: int, hidden_layers: list, output_count: int):
+    return NetworkHelpers.create_simple_actor_network(input_count, hidden_layers, output_count, tanh=True)
+
+
+def create_critic_network(input_count: int, hidden_layers: list, output_count: int):
+    return NetworkHelpers.create_simple_critic_network(input_count, hidden_layers, output_count, tanh=True)
+
+
 def get_frame_difference(observation, _previous_frame, device=torch.device('cpu')):
     # pre-process the observation, set input to network to be difference image
     processed_frame = Helpers.preprocess_frame(observation, device)
     if _previous_frame is not None:
         return processed_frame - _previous_frame, processed_frame
     else:
-        return torch.tensor(np.zeros(pixels_count)).type(torch.FloatTensor).to(device), processed_frame
+        return np.zeros(pixels_count), processed_frame
 
 
 if __name__ == '__main__':
     env = gym.make("Pong-v0")
+    state_dimension = pixels_count
     current_frame = env.reset()
     previous_frame, running_reward = None, None  # To compute the difference frame
     reward_sum = 0
@@ -57,20 +66,23 @@ if __name__ == '__main__':
         episode_number = agent.episode
 
     elif algorithm == 'ppo':
-        actor = Actor(NetworkHelpers.create_simple_network(output_count=len(action_space), tanh=True), action_space)
-        critic = Critic(NetworkHelpers.create_simple_network(output_count=1, tanh=True))
-        agent = PPOAgent(actor, critic, action_space, 0, batch_size=batch_size)
+        actor = Actor(create_actor_network(state_dimension, [128, 128], len(action_space)), action_space)
+        critic = Critic(create_critic_network(state_dimension, [128], 1))
         episode_number = 0
+        agent = PPOAgent(actor, critic, action_space, episode_number, batch_size=batch_size)
 
     while True:
         render_game()
+
         if frame_difference_enabled:
             state, previous_frame = get_frame_difference(current_frame, previous_frame)
         else:
             state = Helpers.preprocess_frame(current_frame)
+
         action = agent.get_action(state)
         current_frame, reward, done, info = env.step(action)
         agent.reap_reward(reward)
+        agent.has_finished(done)
         reward_sum += reward
 
         if reward != 0:  # Pong has either +1 or -1 reward exactly when the game ends.
@@ -78,7 +90,9 @@ if __name__ == '__main__':
 
         if done:
             episode_number += 1
-            agent.make_episode_updates()
+
+            if episode_number % batch_size == 0:
+                agent.make_episode_updates()
 
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))

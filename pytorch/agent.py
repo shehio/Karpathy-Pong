@@ -22,9 +22,9 @@ class Agent:
             self.episode = self.__load_policy_network_and_episode()
 
     def get_action(self, state):
-        probabilities = self.policy_network(state, self.frame_difference_enabled)
+        probabilities = self.policy_network(state, self.frame_difference_enabled)  # -> list [3]
         distribution = Categorical(probabilities)
-        action = distribution.sample()
+        action = distribution.sample()  # -> [0.5, 0.3, 0.2]
 
         self.memory.dlogps.append(distribution.log_prob(action))
         action = self.action_space[action.item()]

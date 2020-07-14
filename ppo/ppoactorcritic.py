@@ -3,8 +3,6 @@ import itertools
 import numpy as np
 import torch
 from torch.distributions import Categorical
-import torch.nn.functional as F
-from torch.optim.rmsprop import RMSprop
 
 from .actor import Actor
 from .critic import Critic
@@ -35,7 +33,10 @@ class PPOActorCritic:
         self.memory = Memory()
 
     def get_action(self, state: np.array):
-        state = torch.from_numpy(state)
+        # from_numpy() automatically inherits input array dtype.
+        # On the other hand, torch.Tensor is an alias for torch.FloatTensor.
+        state = torch.Tensor(state)
+
         self.memory.states.append(state)
 
         with torch.no_grad():
@@ -52,18 +53,19 @@ class PPOActorCritic:
     def has_finished(self, done):
         self.memory.episode_complete.append(done)
 
-    def make_episode_updates(self):
-        self.episode_number = self.episode_number + 1
+    def update_batch(self, batch_size):
+        self.batch_size = batch_size
 
-        if self.episode_number % self.batch_size == 0:
-            self.__evaluate_and_train_networks()
-            self.__reset_actor_and_memory()
+    def make_episode_updates(self):
+        self.episode_number = self.episode_number + 1  # @Todo This should probably be removed from the class.
+        self.__evaluate_and_train_networks()
+        self.__reset_actor_and_memory()
 
     def __get_optimizers(self):
         params = [self.new_policy_network.parameters(), self.critic.value_network.parameters()]
         optimizer = torch.optim.Adam(itertools.chain(*params), lr=self.learning_rate, betas=(0.9, 0.999))
 
-        # It Model never converges using RMSProp for some reason, investigate!
+        # @Todo The model never converges using RMSProp for some reason, investigate!
         # optimizer = RMSprop(itertools.chain(*params), lr=self.learning_rate, weight_decay=self.decay_rate)
         return optimizer
 
@@ -82,7 +84,7 @@ class PPOActorCritic:
             distributions = Categorical(action_probabilities)
             new_action_log_probabilities = distributions.log_prob(old_actions)
 
-            state_values = self.critic.evaluate(old_states)
+            state_values = self.critic.evaluate(old_states).flatten()
             advantages = rewards - state_values.detach()
 
             policy_ratio = torch.exp(new_action_log_probabilities - old_action_log_probabilities)
